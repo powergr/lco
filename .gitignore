@@ -20,3 +20,9 @@ lerna-debug.log*
 *.sw?
 *.jks
 *.keystore
+
+#Python
+__pycache__/
+
+# Various files
+*.db
