@@ -187,7 +187,7 @@ def compress_text(
     query_vec = _tfidf_vec(query_tokens, idf, vocab) if query_tokens else []
 
     scores: list[float] = []
-    for i, (sent, tokens) in enumerate(zip(sentences, all_tokens_per_sent)):
+    for i, (_, tokens) in enumerate(zip(sentences, all_tokens_per_sent)):
         # 1. Position weight
         if i == 0:
             pos_w = POSITION_FIRST_WEIGHT
@@ -262,7 +262,7 @@ def compress_messages(
       medium     0.55  — meaningful reduction, good for long conversations
       aggressive 0.35  — maximum reduction, may lose some nuance
     """
-    BUDGET_FRACTION = {"light": 0.80, "medium": 0.55, "aggressive": 0.35}
+    BUDGET_FRACTION = {"light": 0.80, "medium": 0.55, "aggressive": 0.50}
     fraction = BUDGET_FRACTION.get(mode, 0.80)
 
     # Extract the last user message as the query for relevance scoring
@@ -275,13 +275,6 @@ def compress_messages(
             if isinstance(content, str):
                 query = content[:500]  # first 500 chars as query signal
             break
-
-    # Per-message token budget: target fraction of each message's OWN length.
-    # Using a global pool divided by message count gave budgets larger than most
-    # messages, so the compressor skipped everything. Instead we pass fraction
-    # to compress_text and let it calculate the budget per message.
-    # per_message_budget is only used as a floor for very short messages.
-    per_message_budget = max(50, int(max_history_tokens * fraction / max(1, len(messages))))
 
     results: list[CompressResult] = []
     compressed: list[dict[str, Any]] = []

@@ -553,54 +553,51 @@ def main():
             print(f"  [{idx+1:2d}/{total_n}] {CYAN(cat_label)}: {convo['name']}")
 
             if args.dry_run:
-                res = dry_run(convo, args.mode)
+                res_opt = dry_run(convo, args.mode)
+                in_saved = res_opt["in_saved"]
+                out_saved = res_opt["out_saved"]  # Changed back to out_saved
+                base_in = res_opt["input_tokens"] + in_saved
+                base_out = res_opt["output_tokens"] + out_saved
             else:
-                if args.verbose:
-                    print()
-                    print(DIM("  ── Input messages ──────────────────────────────────"))
-                    for _msg in convo["messages"]:
-                        _role = _msg["role"].upper()
-                        _text = str(_msg.get("content",""))
-                        _trunc = _text[:250] + ("…" if len(_text) > 250 else "")
-                        print(f"  [{_role}] {_trunc}")
-                    print()
-
-                print("         → ", end="", flush=True)
-                res = send_one(client, args.proxy, body, headers, args.mode)
-                if "error" in res:
-                    print(RED(f"FAILED: {res['error']}"))
+                # --- PASS 1: BASELINE (Passthrough) ---
+                print("         → [Baseline] ", end="", flush=True)
+                res_base = send_one(client, args.proxy, body, headers, "passthrough")
+                if "error" in res_base:
+                    print(RED(f"FAILED: {res_base['error']}"))
                     continue
-                print(DIM(f"{res['latency_ms']:.0f}ms  out={res['output_tokens']}tok"))
+                base_in = res_base["input_tokens"]
+                base_out = res_base["output_tokens"]
+                print(DIM(f"{res_base['latency_ms']:.0f}ms  in={base_in} out={base_out}tok"))
 
-                if args.verbose:
-                    _ins  = res.get("in_saved",  0)
-                    _outs = res.get("out_saved", 0)
-                    print()
-                    print(DIM("  ── Compression result ───────────────────────────────"))
-                    print(f"  Input : {res['input_tokens']+_ins} tok "
-                          f"→ {res['input_tokens']} tok  (saved {GREEN(str(_ins))})")
-                    print(f"  Output: {res['output_tokens']+_outs} tok "
-                          f"→ {res['output_tokens']} tok  (saved {GREEN(str(_outs))})")
-                    print(DIM("  (run proxy with --log-level DEBUG to see full text in logs)"))
-                    print()
+                # --- PASS 2: OPTIMIZED ---
+                print("         → [Optimized] ", end="", flush=True)
+                res_opt = send_one(client, args.proxy, body, headers, args.mode)
+                if "error" in res_opt:
+                    print(RED(f"FAILED: {res_opt['error']}"))
+                    continue
+                print(DIM(f"{res_opt['latency_ms']:.0f}ms  in={res_opt['input_tokens']} out={res_opt['output_tokens']}tok"))
 
-            in_saved    = res.get("in_saved", 0)
-            out_saved   = res.get("out_saved", 0)
+                # True Savings Calculation
+                in_saved = res_opt.get("in_saved", 0)
+                
+                # The true output savings is the difference between what the LLM 
+                # naturally generated, and the final output the proxy delivered.
+                out_saved = max(0, base_out - res_opt["output_tokens"])  # Changed back to out_saved
+
             total_saved = in_saved + out_saved
-            in_original = res["input_tokens"] + in_saved
-            orig_total  = in_original + res["output_tokens"] + out_saved
+            orig_total  = base_in + base_out
             pct         = total_saved / max(1, orig_total) * 100
 
             rec = {
                 "name":        convo["name"],
-                "in_original": in_original,
-                "in_used":     res["input_tokens"],
+                "in_original": base_in,
+                "in_used":     res_opt["input_tokens"],
                 "in_saved":    in_saved,
-                "out_tokens":  res["output_tokens"],
+                "out_tokens":  res_opt["output_tokens"],
                 "out_saved":   out_saved,
                 "total_saved": total_saved,
                 "pct":         pct,
-                "latency_ms":  res["latency_ms"],
+                "latency_ms":  res_opt.get("latency_ms", 0),
             }
             results_by_cat[cat].append(rec)
 

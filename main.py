@@ -52,7 +52,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="LCO — LLM Context Optimizer",
         description="Local-first, OpenAI-compatible proxy that reduces LLM costs.",
-        version="0.1.0-mvp",
+        version="0.2.2",
         docs_url="/lco/docs",
         redoc_url=None,
         lifespan=lifespan,

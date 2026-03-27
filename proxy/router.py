@@ -237,6 +237,21 @@ async def proxy(request: Request, path: str) -> Any:
     optimised_body = body
     query = _last_user_query(messages)
 
+        # ── LCO-NEW: Pre-Generation Output Optimization ───────────────────
+    if mode in ("medium", "aggressive"):
+            instruction = (
+                "\n\n[System Note: Be extremely concise. Omit all pleasantries, "
+                "introductions, and summaries. If providing code, output ONLY the code blocks.]"
+            ) if mode == "aggressive" else "\n\n[System Note: Be concise.]"
+
+            # Inject into the LAST user message instead of the system prompt
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    m["content"] = str(m.get("content", "")) + instruction
+                    break
+            
+            optimised_body = {**optimised_body, "messages": messages}
+
     if mode != "passthrough" and messages:
 
         # ── LCO-7: Memory compression ─────────────────────────────────────

@@ -423,6 +423,12 @@ Expected (without Ollama running): **174 passed, 12 skipped**
 
 ---
 
+## Real World benchmarks
+
+[Groq results](groq.md)
+
+---
+
 ## Quality gate tuning
 
 The quality gate compares original vs compressed text using cosine

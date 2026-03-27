@@ -44,7 +44,7 @@ class Config:
     # TF-IDF threshold: 0.40 works for extractive compression (word overlap only)
     # Ollama/neural threshold: 0.80 measures actual semantics (set via LCO_QUALITY_THRESHOLD)
     quality_threshold: float = field(
-        default_factory=lambda: float(os.getenv("LCO_QUALITY_THRESHOLD", "0.40"))
+        default_factory=lambda: float(os.getenv("LCO_QUALITY_THRESHOLD", "0.15"))
     )
 
     # ── Compression ──────────────────────────────────────────────────────────

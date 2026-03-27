@@ -48,9 +48,9 @@ logger = logging.getLogger("lco.output_optimizer")
 
 # Fraction of original length to target as output budget
 _BUDGET_FRACTION = {
-    "light":      0.82,
-    "medium":     0.58,
-    "aggressive": 0.38,
+    "light":      0.80,
+    "medium":     0.50,
+    "aggressive": 0.30, # Pushed from 0.38 to 0.30
 }
 
 # Minimum output length — never compress below this many tokens
@@ -61,7 +61,13 @@ _MIN_OUTPUT_TOKENS = 30
 # Patterns common in LLM outputs that add tokens with minimal information value.
 # These complement the input-side cleaner patterns.
 
-_OUTPUT_BOILERPLATE: list[re.Pattern] = [
+_OUTPUT_BOILERPLATE: list[re.Pattern] =[
+    # New aggressive conversational strippers
+    re.compile(r"^(certainly|sure|of course|absolutely|yes)[!.,]\s*", re.I | re.M),
+    re.compile(r"^(here is|here are|here's) (the|some) (code|solution|information|breakdown)[^:]*:\s*", re.I | re.M),
+    re.compile(r"^(based on your (request|query)|to answer your question)[^,]*,\s*", re.I | re.M),
+    
+    # Existing ones
     re.compile(r"^in (summary|conclusion|short)[,:]\s*", re.I | re.M),
     re.compile(r"^to summarize[,:]\s*", re.I | re.M),
     re.compile(r"^in other words[,:]\s*", re.I | re.M),
