@@ -1,4 +1,4 @@
-# LCO — LLM Context Optimizer v0.2.0
+# LCO — LLM Context Optimizer v0.2.2
 
 > Local-first proxy that reduces LLM costs by compressing both input and
 > output tokens — automatically, without changing your application code.

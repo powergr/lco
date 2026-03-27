@@ -131,5 +131,3 @@ Total : saved → $0.0424 / 12 requests
 Extrapolated:
 1,000 req/day → $3.53/day
 10,000 req/day → $35.31/day
-
-Dashboard: [dashboard](http://127.0.0.1:8000/lco/dashboard)
