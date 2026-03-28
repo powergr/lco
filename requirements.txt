@@ -1,6 +1,13 @@
+# Core proxy
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 httpx>=0.27.0
 aiosqlite>=0.20.0
 python-dotenv>=1.0.0
 typer>=0.12.0
+
+# Tray app
+pystray>=0.19.0
+Pillow>=10.0.0
+# tkinter is built into Python on Windows and macOS
+# On Linux: sudo apt install python3-tk

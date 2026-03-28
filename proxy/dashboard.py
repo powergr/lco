@@ -86,7 +86,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
   <div class="logo"><span class="dot" id="dot"></span>LCO — LLM Context Optimizer</div>
   <div style="display:flex;gap:10px;align-items:center">
     <span class="ts">updated <span id="ts">—</span></span>
-    <span class="badge" id="ver">v0.2.2</span>
+    <span class="badge" id="ver">—</span>
   </div>
 </div>
 

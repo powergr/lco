@@ -68,25 +68,6 @@ async def _passthrough(text: str) -> str:
 
 # ── SSE parsing helpers ───────────────────────────────────────────────────────
 
-def _parse_sse_chunk(raw_bytes: bytes) -> list[dict]:
-    """
-    Parse one or more SSE data lines from a raw bytes chunk.
-    Returns a list of parsed JSON objects (skips [DONE] and non-data lines).
-    """
-    events = []
-    for line in raw_bytes.decode("utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line.startswith("data:"):
-            continue
-        payload = line[5:].strip()
-        if payload == "[DONE]" or not payload:
-            continue
-        try:
-            events.append(json.loads(payload))
-        except json.JSONDecodeError:
-            pass
-    return events
-
 
 def _extract_delta_text(event: dict) -> str:
     """Pull the content string out of an OpenAI-format SSE delta event."""
@@ -189,7 +170,20 @@ class StreamBuffer:
         async for chunk in upstream:
             result.raw_chunks.append(chunk)
 
-            for event in _parse_sse_chunk(chunk):
+        # Glue all chunks together safely (immune to TCP packet boundaries)
+        full_payload = b"".join(result.raw_chunks).decode("utf-8", errors="replace")
+        
+        for line in full_payload.splitlines():
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+                
+            data_str = line[5:].strip()
+            if data_str == "[DONE]" or not data_str:
+                continue
+                
+            try:
+                event = json.loads(data_str)
                 # Capture metadata from any event that has it
                 if not result.completion_id:
                     result.completion_id = event.get("id", "")
@@ -206,6 +200,8 @@ class StreamBuffer:
 
                 # Accumulate text
                 result.assembled_text += _extract_delta_text(event)
+            except json.JSONDecodeError:
+                pass
 
         result.collect_ms = (time.perf_counter() - t0) * 1000
 

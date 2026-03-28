@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
+from .version import __version__ as _VERSION
 from .middleware.metrics import MetricsMiddleware
 from .proxy.router import router, get_client
 from .storage.metrics import MetricsDB
@@ -52,7 +53,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="LCO — LLM Context Optimizer",
         description="Local-first, OpenAI-compatible proxy that reduces LLM costs.",
-        version="0.2.2",
+        version=_VERSION,
         docs_url="/lco/docs",
         redoc_url=None,
         lifespan=lifespan,

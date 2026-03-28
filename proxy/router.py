@@ -33,6 +33,7 @@ from ..proxy.quality_gate import get_quality_gate
 from ..proxy.quality_gate import reset_quality_gate as _reset_gate
 from ..proxy.llm_compressor import get_llm_compressor
 from ..storage.metrics import MetricsDB, RequestRecord
+from ..version import __version__ as _VERSION
 
 logger = logging.getLogger("lco.proxy")
 
@@ -237,21 +238,6 @@ async def proxy(request: Request, path: str) -> Any:
     optimised_body = body
     query = _last_user_query(messages)
 
-        # ── LCO-NEW: Pre-Generation Output Optimization ───────────────────
-    if mode in ("medium", "aggressive"):
-            instruction = (
-                "\n\n[System Note: Be extremely concise. Omit all pleasantries, "
-                "introductions, and summaries. If providing code, output ONLY the code blocks.]"
-            ) if mode == "aggressive" else "\n\n[System Note: Be concise.]"
-
-            # Inject into the LAST user message instead of the system prompt
-            for m in reversed(messages):
-                if m.get("role") == "user":
-                    m["content"] = str(m.get("content", "")) + instruction
-                    break
-            
-            optimised_body = {**optimised_body, "messages": messages}
-
     if mode != "passthrough" and messages:
 
         # ── LCO-7: Memory compression ─────────────────────────────────────
@@ -453,7 +439,7 @@ async def proxy(request: Request, path: str) -> Any:
 
 @router.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": _VERSION}
 
 
 @router.get("/lco/status")
@@ -465,7 +451,7 @@ async def status() -> dict:
         summary = {}
     return {
         "status": "running",
-        "version": "0.2.0",
+        "version": _VERSION,
         "compression_mode": settings.compression_mode,
         "output_optimization": settings.output_optimization,
         "memory_compression": settings.memory_compression,
