@@ -220,8 +220,6 @@ async def proxy(request: Request, path: str) -> Any:
     record.provider = provider_name
     record.model = body.get("model", "unknown")
     record.path = f"/v1/{path}"
-    record.compression_mode = settings.compression_mode
-
     messages: list[dict[str, Any]] = body.get("messages", [])
     classifications = classify_messages(messages)
     safe_hits = _count_safe_zone_hits(classifications)
@@ -235,6 +233,8 @@ async def proxy(request: Request, path: str) -> Any:
     _valid_modes = {"passthrough", "light", "medium", "aggressive"}
     _override = headers.get("x-lco-mode-override", "").lower().strip()
     mode = _override if _override in _valid_modes else settings.compression_mode
+    # Record the EFFECTIVE mode (after override), not just the global setting
+    record.compression_mode = mode
     optimised_body = body
     query = _last_user_query(messages)
 

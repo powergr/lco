@@ -27,6 +27,8 @@ logs/
 !.vscode/extensions.json
 .idea/
 .DS_Store
+
 # Executables
 dist/
 build/
+*.exe
