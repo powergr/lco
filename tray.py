@@ -101,21 +101,32 @@ PROVIDER_URLS: dict[str, str] = {
     "ollama":     "http://localhost:11434",
 }
 
-PROVIDER_MODELS: dict[str, list[str]] = {
+# Suggested models per provider — shown as hints, never enforced.
+# Users type any model name they want; history is saved per-provider in settings.
+PROVIDER_MODEL_HINTS: dict[str, list[str]] = {
     "openai":     ["gpt-4o-mini", "gpt-4o", "o1-mini", "gpt-3.5-turbo"],
     "anthropic":  ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-5"],
-    "openrouter": ["openrouter/free", "anthropic/claude-3-5-sonnet",
+    # openrouter/free is a valid shorthand for a random free model.
+    # Format for specific models: provider/model-name:free
+    "openrouter": ["openrouter/free",
+                   "openai/gpt-4o-mini",
                    "meta-llama/llama-3.1-8b-instruct:free",
-                   "nvidia/nemotron-3-super-120b-a12b:free"],
+                   "stepfun/step-3.5-flash:free",
+                   "nvidia/nemotron-3-super-120b-a12b:free",
+                   "google/gemma-2-9b-it:free",
+                   "z-ai/glm-4.5-air:free"],
     "groq":       ["llama-3.3-70b-versatile", "llama-3.1-8b-instant",
-                   "qwen3-32b"],
+                   "mixtral-8x7b-32768", "gemma2-9b-it"],
     "mistral":    ["mistral-large-latest", "mistral-small-latest",
-                   "codestral-latest"],
+                   "codestral-latest", "mistral-nemo"],
     "together":   ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
                    "mistralai/Mixtral-8x7B-Instruct-v0.1"],
     "deepseek":   ["deepseek-chat", "deepseek-coder"],
-    "ollama":     ["llama3.2", "qwen2.5:7b", "mistral", "phi3"],
+    "ollama":     ["llama3.2", "qwen2.5:7b", "mistral", "phi3",
+                   "deepseek-r1:7b", "gemma3:4b"],
 }
+# Keep backward compat alias
+PROVIDER_MODELS = PROVIDER_MODEL_HINTS
 
 # Key field name per provider (maps to settings dict key)
 PROVIDER_KEY_FIELD: dict[str, str] = {
@@ -435,7 +446,6 @@ def _show_settings(root: Any, settings: dict[str, Any],
     win = tk.Toplevel(root)
     win.title("LCO — Settings")
     win.resizable(False, False)
-    win.attributes("-topmost", True)
     win.configure(bg=BG)
     F = _fonts()
 
@@ -468,9 +478,22 @@ def _show_settings(root: Any, settings: dict[str, Any],
 
     provider_var = tk.StringVar(value=settings.get("provider","openai"))
     url_var      = tk.StringVar(value=settings.get("openai_url","https://api.openai.com"))
-    model_var    = tk.StringVar(value=settings.get("model","gpt-4o-mini"))
-    custom_var   = tk.StringVar()
 
+    # Per-provider model history stored in settings["provider_models"]
+    # Falls back to hints if no history exists
+    provider_models_hist: dict[str, list[str]] = settings.get("provider_models", {})
+
+    def _current_model_for(p: str) -> str:
+        """Return the last-used model for provider p."""
+        hist = provider_models_hist.get(p, [])
+        if hist:
+            return hist[0]
+        hints = PROVIDER_MODEL_HINTS.get(p, [])
+        return hints[0] if hints else ""
+
+    model_var = tk.StringVar(value=_current_model_for(settings.get("provider","openai")))
+
+    # ── Provider row ──────────────────────────────────────────────────────────
     tk.Label(pf, text="Provider", font=F["label"], fg=MUTED, bg=BG,
              width=18, anchor="w").grid(row=0, column=0, sticky="w")
     prov_menu = tk.OptionMenu(pf, provider_var, *PROVIDER_URLS.keys())
@@ -479,35 +502,91 @@ def _show_settings(root: Any, settings: dict[str, Any],
                      highlightthickness=0, width=14)
     prov_menu.grid(row=0, column=1, sticky="w")
 
+    # ── URL row ───────────────────────────────────────────────────────────────
     tk.Label(pf, text="URL", font=F["label"], fg=MUTED, bg=BG,
              width=18, anchor="w").grid(row=1, column=0, sticky="w", pady=3)
     url_entry = _entry(pf, url_var)
     url_entry.grid(row=1, column=1, sticky="w")
 
+    # ── Model row — single editable field with dropdown history ───────────────
     tk.Label(pf, text="Model", font=F["label"], fg=MUTED, bg=BG,
              width=18, anchor="w").grid(row=2, column=0, sticky="w", pady=3)
-    model_menu = tk.OptionMenu(pf, model_var, model_var.get())
-    model_menu.config(font=F["label"], bg=SURFACE, fg=TEXT,
-                      activebackground=ACCENT, relief="flat",
-                      highlightthickness=0, width=28)
-    model_menu.grid(row=2, column=1, sticky="w")
 
-    tk.Label(pf, text="Custom model", font=F["label"], fg=MUTED, bg=BG,
-             width=18, anchor="w").grid(row=3, column=0, sticky="w", pady=3)
-    custom_entry = _entry(pf, custom_var)
-    custom_entry.grid(row=3, column=1, sticky="w")
-    tk.Label(pf, text="(overrides dropdown)", font=F["label"],
-             fg=MUTED, bg=BG).grid(row=3, column=2, padx=6)
+    model_frame = tk.Frame(pf, bg=BG)
+    model_frame.grid(row=2, column=1, sticky="w", columnspan=2)
+
+    model_entry = tk.Entry(model_frame, textvariable=model_var, font=F["mono"],
+                           bg=SURFACE, fg=TEXT, insertbackground=TEXT,
+                           relief="flat", width=30)
+    model_entry.pack(side="left")
+
+    # Dropdown arrow button — shows history + hints for this provider
+    def _show_model_picker() -> None:
+        p     = provider_var.get()
+        hist  = provider_models_hist.get(p, [])
+        hints = PROVIDER_MODEL_HINTS.get(p, [])
+        # Combined list: history first (de-duped), then hints not already shown
+        combined: list[str] = list(dict.fromkeys(hist + hints))
+
+        picker = tk.Toplevel(win)
+        picker.title("")
+        picker.overrideredirect(True)        # borderless
+        picker.configure(bg=SURFACE)
+
+        lb = tk.Listbox(picker, font=F["mono"], bg=SURFACE, fg=TEXT,
+                        selectbackground=ACCENT, selectforeground="#000",
+                        relief="flat", bd=0, width=32,
+                        height=min(len(combined), 10))
+        lb.pack(padx=1, pady=1)
+        for item in combined:
+            lb.insert("end", item)
+
+        # Mark history items differently
+        for i, item in enumerate(combined):
+            if item in hist:
+                lb.itemconfig(i, fg=TEXT)
+            else:
+                lb.itemconfig(i, fg=MUTED)
+
+        def _pick(evt: Any = None) -> None:
+            sel = lb.curselection()
+            if sel:
+                model_var.set(lb.get(sel[0]))
+            picker.destroy()
+
+        lb.bind("<Return>",      _pick)
+        lb.bind("<Double-1>",    _pick)
+        lb.bind("<FocusOut>",    lambda e: picker.destroy())
+        lb.bind("<Escape>",      lambda e: picker.destroy())
+
+        # Position below the model entry
+        model_entry.update_idletasks()
+        x = model_entry.winfo_rootx()
+        y = model_entry.winfo_rooty() + model_entry.winfo_height()
+        picker.geometry(f"+{x}+{y}")
+        lb.focus_set()
+
+    tk.Button(model_frame, text="▾", font=F["label"],
+              bg=SURFACE, fg=TEXT, relief="flat", bd=0,
+              padx=6, cursor="hand2",
+              command=_show_model_picker).pack(side="left", padx=(2,0))
+
+    # Hint label that updates with provider
+    hint_var = tk.StringVar()
+    hint_lbl = tk.Label(pf, textvariable=hint_var, font=F["label"],
+                        fg=MUTED, bg=BG)
+    hint_lbl.grid(row=3, column=1, sticky="w", pady=(0,2))
 
     def _refresh_models() -> None:
-        p      = provider_var.get()
-        models = PROVIDER_MODELS.get(p, [model_var.get()])
-        menu   = model_menu["menu"]
-        menu.delete(0, "end")
-        for m in models:
-            menu.add_command(label=m, command=lambda _m=m: model_var.set(_m))
-        if model_var.get() not in models:
-            model_var.set(models[0])
+        p = provider_var.get()
+        # Set model to last used for this provider
+        model_var.set(_current_model_for(p))
+        # Update hint
+        hints = PROVIDER_MODEL_HINTS.get(p, [])
+        if hints:
+            hint_var.set(f"e.g. {hints[0]}")
+        else:
+            hint_var.set("")
 
     def _on_provider(*_: Any) -> None:
         p = provider_var.get()
@@ -636,10 +715,10 @@ def _show_settings(root: Any, settings: dict[str, Any],
         p     = provider_var.get()
         field = PROVIDER_KEY_FIELD.get(p, "openai_key")
         key   = key_vars.get(field, tk.StringVar()).get().strip() if field else "no-key"
-        model = custom_var.get().strip() or model_var.get()
+        model = model_var.get().strip()  # single editable field
 
         def _do() -> None:
-            ok, msg, ms = client.test_connection(model, key, url_var.get())
+            ok, msg, _ = client.test_connection(model, key, url_var.get())
             def _apply() -> None:
                 test_result.set(f"{'✓' if ok else '✗'} {msg}")
                 test_lbl.config(fg=GREEN if ok else RED_C)
@@ -657,15 +736,22 @@ def _show_settings(root: Any, settings: dict[str, Any],
     status_lbl.pack(side="left", padx=16)
 
     def _save() -> None:
-        model_final = custom_var.get().strip() or model_var.get()
+        model_final = model_var.get().strip()
         p = provider_var.get()
         port_int = int(port_var.get() or 8000)
 
+        # Save model into per-provider history (most-recent first, max 8)
+        hist = dict(provider_models_hist)
+        prov_hist = [m for m in hist.get(p, []) if m != model_final]
+        hist[p] = ([model_final] + prov_hist)[:8]
+        provider_models_hist.update(hist)
+
         new_s = dict(settings)
         new_s.update({
-            "provider":    p,
-            "openai_url":  url_var.get().strip(),
-            "model":       model_final,
+            "provider":        p,
+            "openai_url":      url_var.get().strip(),
+            "model":           model_final,
+            "provider_models": hist,
             "mode":        mode_var.get(),
             "output_on":   out_var.get(),
             "memory_on":   mem_var.get(),
@@ -720,7 +806,6 @@ def _show_status(root: Any, state: AppState, client: ProxyClient,
     popup = tk.Toplevel(root)
     popup.title("LCO — Status")
     popup.resizable(False, False)
-    popup.attributes("-topmost", True)
     popup.configure(bg=BG)
     F = _fonts()
 
@@ -774,8 +859,8 @@ def _show_status(root: Any, state: AppState, client: ProxyClient,
 
     # Mode buttons
     mf2 = tk.Frame(popup, bg=BG, pady=6); mf2.pack(fill="x", padx=16, pady=4)
-    tk.Label(mf2, text="Mode", font=F["label"], fg=MUTED,
-             bg=BG).pack(anchor="w", pady=(0,4))
+    tk.Label(mf2, text="Compression Mode  (click to change)",
+             font=F["label"], fg=MUTED, bg=BG).pack(anchor="w", pady=(0,4))
     br = tk.Frame(mf2, bg=BG); br.pack(fill="x")
     mode_btns: dict[str, Any] = {}
     for m in MODES:
@@ -785,8 +870,8 @@ def _show_status(root: Any, state: AppState, client: ProxyClient,
         b.pack(side="left", padx=2); mode_btns[m] = b
 
     of = tk.Frame(popup, bg=BG); of.pack(fill="x", padx=16, pady=2)
-    tk.Label(of, text="Output compression", font=F["label"],
-             fg=MUTED, bg=BG).pack(side="left")
+    tk.Label(of, text="Output compression  (click to toggle)",
+             font=F["label"], fg=MUTED, bg=BG).pack(side="left")
     out_btn = tk.Button(of, text="OFF", font=F["label"], relief="flat",
                         bd=0, padx=8, pady=3, cursor="hand2",
                         command=lambda: _toggle_out())
@@ -808,21 +893,39 @@ def _show_status(root: Any, state: AppState, client: ProxyClient,
               fg=MUTED, bg=SURFACE, padx=12, pady=6, cursor="hand2",
               command=popup.destroy).pack(side="right", padx=8)
 
+    # pending_* tracks what the user just clicked so _tick doesn't fight it
+    pending_mode: list[str] = [state.mode]
+    pending_out:  list[bool] = [state.output_on]
+
     def _upd_btns(cur: str) -> None:
         for _m, btn in mode_btns.items():
             a = _m == cur
-            btn.configure(bg=MODE_COL.get(_m,MUTED) if a else SURFACE,
-                          fg="#000" if a else MUTED)
+            col = MODE_COL.get(_m, MUTED)
+            btn.configure(
+                bg=col          if a else SURFACE,
+                fg="#000"       if a else MUTED,
+                relief="solid"  if a else "flat",
+                bd=1            if a else 0,
+            )
 
     def _set_mode(m: str) -> None:
-        client.set(compression_mode=m); state.mode = m; _upd_btns(m)
+        pending_mode[0] = m
+        client.set(compression_mode=m)
+        state.mode = m
+        _upd_btns(m)
+        settings["mode"] = m
+        save_settings(settings)
         if icon_ref:
             icon_ref[0].menu = _build_menu(state,client,icon_ref,
                                            root,settings,stop)
 
     def _toggle_out() -> None:
-        new = not state.output_on; client.set(output_optimization=new)
+        new = not pending_out[0]
+        pending_out[0] = new
+        client.set(output_optimization=new)
         state.output_on = new
+        settings["output_on"] = new
+        save_settings(settings)
         out_btn.configure(text="ON ✓" if new else "OFF",
                           bg=GREEN if new else SURFACE,
                           fg="#000" if new else MUTED)
@@ -831,17 +934,22 @@ def _show_status(root: Any, state: AppState, client: ProxyClient,
         with state.lock:
             running=state.running; sess=state.session_dollars
             total=state.total_dollars; in_s=state.total_in_saved
-            out_s=state.total_out_saved; reqs=state.total_requests; cur=state.mode
+            out_s=state.total_out_saved; reqs=state.total_requests
+            server_mode=state.mode
+        # Sync pending state with server once the poll confirms the change
+        if server_mode == pending_mode[0]:
+            _upd_btns(pending_mode[0])
         dot.configure(fg=GREEN if running else RED_C)
         sess_lbl.configure(text=_fmt_dollars(sess))
         all_lbl.configure(text=_fmt_dollars(total))
         in_lbl.configure(text=f"Input saved:  {in_s:,} tokens")
         out_lbl.configure(text=f"Output saved: {out_s:,} tokens")
         req_lbl.configure(text=f"Requests:     {reqs:,}")
-        _upd_btns(cur)
-        out_btn.configure(text="ON ✓" if state.output_on else "OFF",
-                          bg=GREEN if state.output_on else SURFACE,
-                          fg="#000" if state.output_on else MUTED)
+        # Only refresh out_btn from server if it matches pending (avoids flicker)
+        if state.output_on == pending_out[0]:
+            out_btn.configure(text="ON ✓" if state.output_on else "OFF",
+                              bg=GREEN if state.output_on else SURFACE,
+                              fg="#000" if state.output_on else MUTED)
         if popup.winfo_exists(): popup.after(2000, _tick)
 
     _upd_btns(state.mode)
@@ -981,6 +1089,8 @@ def main() -> None:
         "LCO_DB_PATH":            str(DB_PATH),
         "OPENAI_API_KEY":         settings.get("openai_key",""),
         "ANTHROPIC_API_KEY":      settings.get("anthropic_key",""),
+        # Active provider key — injected as fallback when client sends no auth
+        "LCO_API_KEY":            _active_key(settings),
     }
     threading.Thread(target=_server_thread, args=(env,),
                      daemon=True, name="lco-server").start()

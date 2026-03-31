@@ -129,9 +129,12 @@ class OpenAIAdapter(BaseAdapter):
         clean = self._clean(dict(incoming))
         headers: dict[str, str] = {"Content-Type": "application/json"}
 
+        import os as _os
         auth = (clean.get("authorization") or
                 clean.get("Authorization") or
-                clean.get("x-api-key") or "")
+                clean.get("x-api-key") or
+                _os.environ.get("LCO_API_KEY") or
+                _os.environ.get("OPENAI_API_KEY") or "")
         if auth:
             headers["Authorization"] = auth if auth.startswith("Bearer ") \
                                         else f"Bearer {auth}"
