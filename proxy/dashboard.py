@@ -173,7 +173,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <thead><tr>
           <th>#</th><th>Provider</th><th>Model</th>
           <th>In used</th><th>In saved</th>
-          <th>Out used</th><th>Out saved</th>
+          <th>Out used</th><th title="Tokens scrubbed post-generation. Pre-generation savings (prevented yap) are reflected in an unusually low 'Out used'."><span style="border-bottom:1px dotted var(--muted);cursor:help">Out saved</span></th>
           <th>Latency</th><th>Mode</th><th>Quality</th><th>Safe</th>
         </tr></thead>
         <tbody id="tbl"></tbody>
