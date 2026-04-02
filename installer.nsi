@@ -3,7 +3,7 @@
 ; Requires: NSIS 3.x from https://nsis.sourceforge.io
 
 !define APPNAME     "LCO"
-!define APPVERSION  "0.2.5"
+!define APPVERSION  "0.2.6"
 !define APPFULLNAME "LCO, LLM Context Optimizer"
 !define PUBLISHER   "LCO Project"
 !define APPEXE      "LCO.exe"
@@ -28,6 +28,7 @@ SetCompressor      /SOLID lzma
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM

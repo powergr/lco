@@ -240,6 +240,21 @@ async def proxy(request: Request, path: str) -> Any:
 
     if mode != "passthrough" and messages:
 
+        # ── LCO-NEW: Pre-Generation Output Optimization ───────────────────
+        if mode in ("medium", "aggressive"):
+            instruction = (
+                "\n\n[System Note: Be extremely concise. Omit all pleasantries, "
+                "introductions, and summaries. If providing code, limit explanations to a maximum of two sentences.]"
+            ) if mode == "aggressive" else "\n\n[System Note: Be concise.]"
+
+            # Inject into the LAST user message instead of the system prompt
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    m["content"] = str(m.get("content", "")) + instruction
+                    break
+            
+            optimised_body = {**optimised_body, "messages": messages}
+
         # ── LCO-7: Memory compression ─────────────────────────────────────
         if settings.memory_compression:
             mem_msgs, mem_result = compress_memory(

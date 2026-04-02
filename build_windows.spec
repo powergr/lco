@@ -121,5 +121,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     # Uncomment after creating assets\lco.ico:
-    # icon=str(ROOT / 'assets' / 'lco.ico'),
+    icon=str(ROOT / 'assets' / 'lco.ico'),
 )

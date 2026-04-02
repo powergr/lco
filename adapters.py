@@ -43,13 +43,13 @@ import httpx
 # ── Model aliases ─────────────────────────────────────────────────────────────
 
 ANTHROPIC_MODEL_MAP: dict[str, str] = {
-    "claude":           "claude-opus-4-5",
-    "claude-opus":      "claude-opus-4-5",
-    "claude-sonnet":    "claude-sonnet-4-6",
-    "claude-haiku":     "claude-haiku-3-5",
-    "claude-3-opus":    "claude-opus-4-5",
-    "claude-3-sonnet":  "claude-sonnet-4-6",
-    "claude-3-haiku":   "claude-haiku-3-5",
+    "claude":           "anthropic/claude-opus-4.6",
+    "claude-opus":      "anthropic/claude-opus-4.6",
+    "claude-sonnet":    "anthropic/claude-sonnet-4.6",
+    "claude-haiku":     "anthropic/claude-haiku-4.6",
+    "claude-3-opus":    "anthropic/claude-opus-4.6",
+    "claude-3-sonnet":  "anthropic/claude-sonnet-4.6",
+    "claude-3-haiku":   "anthropic/claude-haiku-4.6",
 }
 
 ANTHROPIC_VERSION = "2023-06-01"
@@ -130,9 +130,26 @@ class OpenAIAdapter(BaseAdapter):
         headers: dict[str, str] = {"Content-Type": "application/json"}
 
         import os as _os
+        # Pick the right stored key for the upstream provider from the URL.
+        # Priority: incoming auth header → URL-matched key → active key → OpenAI key
+        url = self.base_url.lower()
+        if "groq" in url:
+            stored_key = _os.environ.get("LCO_KEY_GROQ", "")
+        elif "openrouter" in url:
+            stored_key = _os.environ.get("LCO_KEY_OPENROUTER", "")
+        elif "mistral" in url:
+            stored_key = _os.environ.get("LCO_KEY_MISTRAL", "")
+        elif "together" in url:
+            stored_key = _os.environ.get("LCO_KEY_OPENROUTER", "")
+        elif "deepseek" in url or "fireworks" in url or "perplexity" in url:
+            stored_key = _os.environ.get("LCO_KEY_OPENAI", "")
+        else:
+            stored_key = _os.environ.get("LCO_KEY_OPENAI", "")
+
         auth = (clean.get("authorization") or
                 clean.get("Authorization") or
                 clean.get("x-api-key") or
+                stored_key or
                 _os.environ.get("LCO_API_KEY") or
                 _os.environ.get("OPENAI_API_KEY") or "")
         if auth:
@@ -182,10 +199,16 @@ class AnthropicAdapter(BaseAdapter):
 
     def build_headers(self, incoming: dict[str, str]) -> dict[str, str]:
         clean = self._clean(dict(incoming))
+        import os
+        
+        # Look for the Anthropic key injected by tray.py
+        stored_key = os.environ.get("LCO_KEY_ANTHROPIC") or os.environ.get("LCO_API_KEY", "")
+        
         api_key = (
             clean.get("x-api-key") or clean.get("X-Api-Key") or
             (clean.get("authorization", "") or
-             clean.get("Authorization", "")).removeprefix("Bearer ").strip()
+             clean.get("Authorization", "")).removeprefix("Bearer ").strip() or
+            stored_key
         )
         return {
             "Content-Type":      "application/json",
@@ -197,8 +220,8 @@ class AnthropicAdapter(BaseAdapter):
         return f"{self.base_url}/v1/messages"
 
     def normalise_request(self, body: dict[str, Any]) -> dict[str, Any]:
-        messages = body.get("messages", [])
-        system_parts, user_msgs = [], []
+        messages = body.get("messages",[])
+        system_parts, user_msgs = [],[]
         for m in messages:
             if m.get("role") == "system":
                 c = m.get("content", "")
@@ -212,9 +235,11 @@ class AnthropicAdapter(BaseAdapter):
             else:
                 user_msgs.append(self._msg_to_anthropic(m))
 
+        model_name = body.get("model", "")
         model = ANTHROPIC_MODEL_MAP.get(
-            body.get("model", ""), body.get("model", "claude-opus-4-5")
+            model_name, model_name or "anthropic/claude-sonnet-4.6"
         )
+        
         payload: dict[str, Any] = {
             "model":      model,
             "max_tokens": body.get("max_tokens") or 4096,
@@ -427,16 +452,15 @@ def get_adapter(headers: dict[str, str], body: dict[str, Any],
                 openai_base_url: str = "https://api.openai.com",
                 anthropic_base_url: str = "https://api.anthropic.com") -> BaseAdapter:
     """Return the correct adapter for this request."""
-    provider = _detect_provider(headers, body, openai_base_url)
-    # Use configured base URL if it overrides the default
-    if provider == "anthropic":
-        url = anthropic_base_url
-        return AnthropicAdapter(client, url)
+    import os
+    
+    # NEW: Read live overrides from headers (for testing) or environment (for saved state)
+    live_openai = headers.get("x-lco-base-url") or os.environ.get("LCO_OPENAI_BASE_URL") or openai_base_url
+    live_anthropic = os.environ.get("LCO_ANTHROPIC_BASE_URL") or anthropic_base_url
 
-    # For OpenAI-compatible providers, use the configured upstream URL
-    # (could be Ollama at localhost, or any other base)
-    if provider == "openai":
-        url = openai_base_url
-    else:
-        url = openai_base_url  # user may have pointed it at e.g. OpenRouter
-    return OpenAIAdapter(client, url, provider=provider)
+    provider = _detect_provider(headers, body, live_openai)
+    
+    if provider == "anthropic":
+        return AnthropicAdapter(client, live_anthropic)
+
+    return OpenAIAdapter(client, live_openai, provider=provider)

@@ -291,15 +291,17 @@ class ProxyClient:
         except Exception: pass
 
     def test_connection(self, model: str, api_key: str,
-                        openai_url: str) -> tuple[bool, str, float]:
+                        openai_url: str, provider: str = "openai") -> tuple[bool, str, float]:
         """Send a minimal test request. Returns (ok, message, latency_ms)."""
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "x-lco-base-url": openai_url,    # Force the proxy to use this URL
+            "x-lco-provider": provider,      # Force the proxy to use this provider format
         }
         body = {
             "model": model,
-            "messages": [{"role": "user", "content": "Reply with: ok"}],
+            "messages":[{"role": "user", "content": "Reply with: ok"}],
             "max_tokens": 5, "stream": False,
         }
         t0 = time.perf_counter()
@@ -614,6 +616,28 @@ def _show_settings(root: Any, settings: dict[str, Any],
     for row_idx, (field, label) in enumerate(key_labels.items()):
         kv = tk.StringVar(value=settings.get(field, ""))
         key_vars[field] = kv
+        
+        # --- NEW: Auto-save on every keystroke ---
+        def make_trace(f_name=field, var_obj=kv):
+            def _on_key_change(*args: Any) -> None:
+                val = var_obj.get().strip()
+                settings[f_name] = val
+                save_settings(settings)
+                
+                # Push the key directly into the active OS environment
+                import os
+                env_key = f"LCO_KEY_{f_name.replace('_key', '').upper()}"
+                os.environ[env_key] = val
+                
+                # If this is the current active provider, update the master key
+                if f_name == PROVIDER_KEY_FIELD.get(provider_var.get(), ""):
+                    os.environ["LCO_API_KEY"] = val
+                    
+            return _on_key_change
+
+        kv.trace_add("write", make_trace())
+        # -----------------------------------------
+
         tk.Label(kf, text=label, font=F["label"], fg=MUTED, bg=BG,
                  width=22, anchor="w").grid(row=row_idx, column=0, sticky="w", pady=2)
         e = tk.Entry(kf, textvariable=kv, font=F["mono"], show="•",
@@ -715,10 +739,12 @@ def _show_settings(root: Any, settings: dict[str, Any],
         p     = provider_var.get()
         field = PROVIDER_KEY_FIELD.get(p, "openai_key")
         key   = key_vars.get(field, tk.StringVar()).get().strip() if field else "no-key"
-        model = model_var.get().strip()  # single editable field
+        model = model_var.get().strip()
+        url   = url_var.get().strip()  # Grab the URL currently typed in the box
 
         def _do() -> None:
-            ok, msg, _ = client.test_connection(model, key, url_var.get())
+            # Pass the url and provider 'p' to the test function
+            ok, msg, _ = client.test_connection(model, key, url, p)
             def _apply() -> None:
                 test_result.set(f"{'✓' if ok else '✗'} {msg}")
                 test_lbl.config(fg=GREEN if ok else RED_C)
@@ -768,6 +794,18 @@ def _show_settings(root: Any, settings: dict[str, Any],
 
         if platform.system() == "Windows":
             _set_startup(startup_var.get())
+
+        # Update the active API key in the live environment immediately.
+        # The server thread reads os.environ on every request via the adapter,
+        # so this takes effect without restarting the proxy.
+        import os as _os
+        _os.environ["LCO_API_KEY"]       = _active_key(new_s)
+        _os.environ["LCO_KEY_OPENAI"]    = new_s.get("openai_key","")
+        _os.environ["LCO_KEY_ANTHROPIC"] = new_s.get("anthropic_key","")
+        _os.environ["LCO_KEY_OPENROUTER"]= new_s.get("openrouter_key","")
+        _os.environ["LCO_KEY_GROQ"]      = new_s.get("groq_key","")
+        _os.environ["LCO_KEY_MISTRAL"]   = new_s.get("mistral_key","")
+        _os.environ["LCO_OPENAI_BASE_URL"] = new_s.get("openai_url", "")
 
         # Apply runtime changes immediately
         client.set(compression_mode=new_s["mode"],
@@ -1089,7 +1127,13 @@ def main() -> None:
         "LCO_DB_PATH":            str(DB_PATH),
         "OPENAI_API_KEY":         settings.get("openai_key",""),
         "ANTHROPIC_API_KEY":      settings.get("anthropic_key",""),
-        # Active provider key — injected as fallback when client sends no auth
+        # Per-provider keys — adapter picks the right one from the upstream URL
+        "LCO_KEY_OPENAI":         settings.get("openai_key",""),
+        "LCO_KEY_ANTHROPIC":      settings.get("anthropic_key",""),
+        "LCO_KEY_OPENROUTER":     settings.get("openrouter_key",""),
+        "LCO_KEY_GROQ":           settings.get("groq_key",""),
+        "LCO_KEY_MISTRAL":        settings.get("mistral_key",""),
+        # Active provider key — fallback for unknown providers
         "LCO_API_KEY":            _active_key(settings),
     }
     threading.Thread(target=_server_thread, args=(env,),
@@ -1102,9 +1146,33 @@ def main() -> None:
         if client.is_alive(): alive = True; break
         time.sleep(0.25)
 
+    if not alive:
+        _show_startup_error(root, port)
+        lock.release(); return
+
+    # --- NEW: Windows Taskbar Icon Fix ---
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            # Tell Windows this is a unique app, not a generic Python script
+            myappid = 'lco.proxy.tray.app.1' 
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        except Exception as e:
+            pass
+    # -------------------------------------
+
     root = tk.Tk()
     root.withdraw()
     root.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    # --- NEW: Replace the Tkinter Green Leaf ---
+    try:
+        from PIL import ImageTk
+        app_icon = ImageTk.PhotoImage(_make_icon(True, settings["mode"]))
+        root.iconphoto(True, app_icon)  # type: ignore
+    except Exception as e:
+        print(f"[LCO] Could not set window icon: {e}")
+    # -------------------------------------------
 
     if not alive:
         _show_startup_error(root, port)
