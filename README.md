@@ -6,7 +6,7 @@
 
 [![Release](https://github.com/powergr/lco/actions/workflows/release.yml/badge.svg)](https://github.com/powergr/lco/actions/workflows/release.yml)
 [![Version](https://img.shields.io/github/v/release/powergr/lco)](https://github.com/powergr/lco/releases)
-[![License](https://img.shields.io/github/license/powergr/lco)](https://github.com/powergr/lco/blob/main/LICENSE)
+[![License](https://img.shields.io/github/license/powergr/lco)](https://github.com/powergr/lco/blob/master/LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/powergr/lco/total)](https://github.com/powergr/lco/releases)
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 
