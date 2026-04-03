@@ -8,11 +8,9 @@
 [![Version](https://img.shields.io/github/v/release/powergr/lco)](https://github.com/powergr/lco/releases)
 [![License](https://img.shields.io/github/license/powergr/lco)](https://github.com/powergr/lco/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/powergr/lco/total)](https://github.com/powergr/lco/releases)
-[![Stars](https://img.shields.io/github/stars/powergr/lco?style=social)](https://github.com/powergr/lco)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 
-![Made with Python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)
-
----
+## [![Stars](https://img.shields.io/github/stars/powergr/lco?style=social)](https://github.com/powergr/lco)
 
 ![LCO Dashboard](docs/dashboard.png)
 ![LCO Tray Settings](docs/settings.png)
