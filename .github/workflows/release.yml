@@ -1,0 +1,77 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*" # This triggers the workflow when you push a tag like 'v0.2.6'
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+
+    permissions:
+      contents: write # Needed to create the GitHub Release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libappindicator3-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pystray Pillow
+
+      - name: Build Application (build.py)
+        run: python build.py
+
+      - name: Build Windows Installer (NSIS)
+        if: runner.os == 'Windows'
+        run: makensis installer.nsi
+
+      - name: Package macOS App (.zip)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          zip -r ../LCO-macOS.zip LCO.app
+
+      - name: Package Linux Binary (.tar.gz)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          tar -czvf ../LCO-Linux.tar.gz LCO
+
+      - name: Prepare Windows Standalone (.exe)
+        if: runner.os == 'Windows'
+        run: |
+          Copy-Item "dist\LCO.exe" -Destination "LCO-Standalone-Windows.exe"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            LCO-macOS.zip
+            LCO-Linux.tar.gz
+            LCO-Standalone-Windows.exe
+            LCO-Setup-*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
