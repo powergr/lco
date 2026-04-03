@@ -2,11 +2,15 @@
 
 > LCO sits directly between your favorite AI app and your LLM API, invisibly cutting token costs and latency by **65%+**.
 
+---
+
 [![Release](https://github.com/powergr/lco/actions/workflows/release.yml/badge.svg)](https://github.com/powergr/lco/actions/workflows/release.yml)
-![Version](https://img.shields.io/github/v/release/powergr/lco)
-![License](https://img.shields.io/github/license/powergr/lco)
-![Downloads](https://img.shields.io/github/downloads/powergr/lco/total)
-![Stars](https://img.shields.io/github/stars/powergr/lco?style=social)
+[![Version](https://img.shields.io/github/v/release/powergr/lco)](https://github.com/powergr/lco/releases)
+[![License](https://img.shields.io/github/license/powergr/lco)](https://github.com/powergr/lco/blob/main/LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/powergr/lco/total)](https://github.com/powergr/lco/releases)
+[![Stars](https://img.shields.io/github/stars/powergr/lco?style=social)](https://github.com/powergr/lco)
+
+![Made with Python](https://img.shields.io/badge/Made%20with-Python-1f425f.svg)
 
 ---
 
